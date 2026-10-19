@@ -1,0 +1,1249 @@
+from datetime import datetime
+import os
+import sqlite3
+import tkinter as tk
+from tkinter import messagebox, ttk
+
+DB_NAME = "pecel_lele_wededed.db"
+
+
+def inisialisasi_database():
+  conn = sqlite3.connect(DB_NAME)
+  cursor = conn.cursor()
+
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            role TEXT
+        )
+    """)
+
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Produk (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama_produk TEXT,
+            kategori TEXT,
+            harga_modal INTEGER,
+            harga_jual INTEGER,
+            stok INTEGER
+        )
+    """)
+
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Member (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nama TEXT,
+            no_telp TEXT,
+            poin INTEGER
+        )
+    """)
+
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Transaksi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tanggal TEXT,
+            id_member INTEGER,
+            nama_kasir TEXT,
+            total_bayar INTEGER,
+            diskon INTEGER,
+            bayar INTEGER,
+            kembalian INTEGER,
+            FOREIGN KEY(id_member) REFERENCES Member(id)
+        )
+    """)
+
+  cursor.execute("PRAGMA table_info(Transaksi)")
+  columns = [column[1] for column in cursor.fetchall()]
+  if "nama_kasir" not in columns:
+    cursor.execute("ALTER TABLE Transaksi ADD COLUMN nama_kasir TEXT")
+  if "bayar" not in columns:
+    cursor.execute("ALTER TABLE Transaksi ADD COLUMN bayar INTEGER DEFAULT 0")
+  if "kembalian" not in columns:
+    cursor.execute(
+        "ALTER TABLE Transaksi ADD COLUMN kembalian INTEGER DEFAULT 0"
+    )
+
+  cursor.execute("PRAGMA table_info(Produk)")
+  prod_columns = [column[1] for column in cursor.fetchall()]
+  if "kategori" not in prod_columns:
+    cursor.execute(
+        "ALTER TABLE Produk ADD COLUMN kategori TEXT DEFAULT 'Makanan'"
+    )
+
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Detail_Transaksi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id_transaksi INTEGER,
+            id_produk INTEGER,
+            jumlah INTEGER,
+            subtotal INTEGER,
+            FOREIGN KEY(id_transaksi) REFERENCES Transaksi(id),
+            FOREIGN KEY(id_produk) REFERENCES Produk(id)
+        )
+    """)
+
+  cursor.execute("SELECT COUNT(*) FROM Users")
+  if cursor.fetchone()[0] == 0:
+    cursor.execute(
+        "INSERT INTO Users (username, password, role) VALUES ('admin',"
+        " 'syarif jelek', 'admin')"
+    )
+    cursor.execute(
+        "INSERT INTO Users (username, password, role) VALUES ('kasir',"
+        " 'syarif jelek', 'kasir')"
+    )
+
+  cursor.execute("SELECT COUNT(*) FROM Produk")
+  if cursor.fetchone()[0] == 0:
+    produk_awal = [
+        (
+            "Paketan Nasi Kenyang (Nasi + Ayam + Minum)",
+            "Paket Hemat",
+            15000,
+            23000,
+            50,
+        ),
+        (
+            "Paketan Mantap (Nasi + Lele + Es Teh)",
+            "Paket Hemat",
+            12000,
+            18000,
+            45,
+        ),
+        (
+            "Paketan Bebek Juara (Nasi + Bebek + Es Jeruk)",
+            "Paket Hemat",
+            22000,
+            32000,
+            35,
+        ),
+        (
+            "Paketan Keluarga (4 Nasi + 4 Ayam + 4 Es Teh + Tahu Tempe)",
+            "Paket Hemat",
+            60000,
+            85000,
+            30,
+        ),
+        (
+            "Paketan Rame-Rame (5 Nasi + 5 Lele + 5 Es Teh + Lalapan)",
+            "Paket Hemat",
+            75000,
+            110000,
+            20,
+        ),
+        ("Lele Goreng Special", "Makanan Utama", 8000, 13000, 40),
+        ("Lele Bakar Madu Special", "Makanan Utama", 10000, 15000, 35),
+        ("Ayam Goreng Lengkuas", "Makanan Utama", 12000, 18000, 40),
+        ("Ayam Bakar Madu", "Makanan Utama", 13000, 19000, 35),
+        ("Ayam Geprek Sambal Korek", "Makanan Utama", 12000, 17000, 40),
+        ("Bebek Goreng Crispy", "Makanan Utama", 18000, 26000, 25),
+        ("Bebek Bakar Bumbu Hitam", "Makanan Utama", 20000, 28000, 20),
+        ("Burung Puyuh Goreng (2 Ekor)", "Makanan Utama", 15000, 22000, 30),
+        ("Nila Goreng Kering", "Makanan Utama", 14000, 20000, 30),
+        ("Gurame Goreng Terbang", "Makanan Utama", 35000, 50000, 15),
+        ("Sate Ati Ampela Goreng", "Menu Tambahan", 3000, 5000, 60),
+        ("Sate Usus Goreng", "Menu Tambahan", 2000, 4000, 70),
+        ("Sate Kulit Krispy", "Menu Tambahan", 3000, 5000, 50),
+        ("Tahu & Tempe Goreng (1 Porsi)", "Menu Tambahan", 2500, 5000, 80),
+        ("Terong Goreng Crispy", "Menu Tambahan", 3000, 6000, 40),
+        ("Cah Kangkung Terasi", "Menu Tambahan", 5000, 9000, 30),
+        ("Petai Goreng / Bakar", "Menu Tambahan", 4000, 7000, 40),
+        ("Sambal Ijo / Sambal Matah Extra", "Menu Tambahan", 1500, 3000, 100),
+        ("Nasi Putih Warm", "Menu Tambahan", 3000, 5000, 150),
+        ("Nasi Uduk Gurih", "Menu Tambahan", 4000, 6000, 100),
+        ("Es Teh Manis", "Minuman", 2000, 4000, 100),
+        ("Teh Hangat Manis", "Minuman", 2000, 3500, 100),
+        ("Es Jeruk Peras", "Minuman", 3000, 6000, 80),
+        ("Jeruk Hangat Peras", "Minuman", 3000, 5500, 80),
+        ("Es Lemon Tea", "Minuman", 3500, 6500, 60),
+        ("Es Nutrisari (Jeruk/Mangga)", "Minuman", 2500, 5000, 80),
+        ("Es Kelapa Muda Asli", "Minuman", 5000, 9000, 40),
+        ("Susu Jahe Hangat", "Minuman", 4000, 7000, 50),
+        ("Air Mineral Botol", "Minuman", 3000, 5000, 100),
+    ]
+    cursor.executemany(
+        "INSERT INTO Produk (nama_produk, kategori, harga_modal, harga_jual,"
+        " stok) VALUES (?, ?, ?, ?, ?)",
+        produk_awal,
+    )
+
+  conn.commit()
+  conn.close()
+
+
+class AplikasiPecelLele:
+
+  def __init__(self, root):
+    self.root = root
+    self.root.title("Aplikasi Kasir - Pecel Lele Wededed")
+    self.root.geometry("720x620")
+    self.root.config(bg="#EBF3FA")
+
+    self.current_user = None
+    inisialisasi_database()
+    self.halaman_login()
+
+  def clear_window(self):
+    for widget in self.root.winfo_children():
+      widget.destroy()
+
+  def halaman_login(self):
+    self.clear_window()
+    self.root.config(bg="#EBF3FA")
+
+    frame = tk.Frame(self.root, bg="white", bd=2, relief="groove")
+    frame.place(relx=0.5, rely=0.5, anchor="center", width=380, height=360)
+
+    tk.Label(
+        frame,
+        text="PECEL LELE WEDEDED",
+        font=("Arial", 14, "bold"),
+        bg="white",
+        fg="#1A5276",
+    ).pack(pady=(20, 5))
+    tk.Label(
+        frame,
+        text="Sistem Kasir & Operasional",
+        font=("Arial", 9, "italic"),
+        bg="white",
+        fg="#5D6D7E",
+    ).pack(pady=(0, 20))
+
+    tk.Label(
+        frame,
+        text="Username:",
+        font=("Arial", 10, "bold"),
+        bg="white",
+        fg="#2C3E50",
+    ).pack(anchor="w", padx=40, pady=(5, 2))
+    self.entry_user = tk.Entry(
+        frame,
+        font=("Arial", 11),
+        bg="#F2F4F4",
+        fg="#2C3E50",
+        relief="solid",
+        bd=1,
+    )
+    self.entry_user.pack(padx=40, fill="x", pady=(0, 10))
+
+    tk.Label(
+        frame,
+        text="Password:",
+        font=("Arial", 10, "bold"),
+        bg="white",
+        fg="#2C3E50",
+    ).pack(anchor="w", padx=40, pady=(5, 2))
+    self.entry_pass = tk.Entry(
+        frame,
+        font=("Arial", 11),
+        show="*",
+        bg="#F2F4F4",
+        fg="#2C3E50",
+        relief="solid",
+        bd=1,
+    )
+    self.entry_pass.pack(padx=40, fill="x", pady=(0, 20))
+
+    tk.Button(
+        frame,
+        text="LOGIN",
+        font=("Arial", 11, "bold"),
+        bg="#2E86C1",
+        fg="white",
+        activebackground="#1B4F72",
+        activeforeground="white",
+        relief="flat",
+        cursor="hand2",
+        command=self.proses_login,
+    ).pack(padx=40, fill="x", pady=5)
+
+  def proses_login(self):
+    username = self.entry_user.get()
+    password = self.entry_pass.get()
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, username, role FROM Users WHERE username = ? AND password ="
+        " ?",
+        (username, password),
+    )
+    user = cursor.fetchone()
+    conn.close()
+
+    if user:
+      self.current_user = user
+      messagebox.showinfo(
+          "Sukses",
+          f"Login berhasil! Selamat datang, {user[1]} ({user[2].upper()}).",
+      )
+      self.halaman_menu_utama(user)
+    else:
+      messagebox.showerror("Error", "Username atau password salah!")
+
+  def halaman_menu_utama(self, user):
+    self.clear_window()
+    self.root.config(bg="#EBF3FA")
+    user_id, username, role = user
+
+    header_frame = tk.Frame(self.root, bg="#1A5276", height=60)
+    header_frame.pack(fill="x", side="top")
+
+    tk.Label(
+        header_frame,
+        text="PECEL LELE WEDEDED",
+        font=("Arial", 14, "bold"),
+        bg="#1A5276",
+        fg="white",
+    ).pack(side="left", padx=20, pady=15)
+    tk.Label(
+        header_frame,
+        text=f"Kasir: {username} | Hak Akses: {role.upper()}",
+        font=("Arial", 10),
+        bg="#1A5276",
+        fg="#D4E6F1",
+    ).pack(side="right", padx=20, pady=15)
+
+    menu_frame = tk.Frame(self.root, bg="white", bd=1, relief="solid")
+    menu_frame.pack(pady=40, padx=50, fill="both", expand=True)
+
+    tk.Label(
+        menu_frame,
+        text="NAVIGASI MENU UTAMA",
+        font=("Arial", 12, "bold"),
+        bg="white",
+        fg="#1A5276",
+    ).pack(pady=15)
+
+    btn_style = {
+        "font": ("Arial", 10, "bold"),
+        "width": 35,
+        "bg": "#EBF3FA",
+        "fg": "#1A5276",
+        "activebackground": "#D4E6F1",
+        "activeforeground": "#1A5276",
+        "relief": "solid",
+        "bd": 1,
+        "cursor": "hand2",
+    }
+
+    if role == "admin":
+      tk.Button(
+          menu_frame,
+          text="Daftar Menu Dijabarkan (Web View)",
+          **btn_style,
+          command=self.lihat_menu_dijabarkan,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Tambah Menu Baru",
+          **btn_style,
+          command=self.tambah_menu,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Hapus Menu (Khusus Admin)",
+          **btn_style,
+          command=self.hapus_menu,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Registrasi Member Baru",
+          **btn_style,
+          command=self.daftar_member,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Riwayat Transaksi & Grafik",
+          **btn_style,
+          command=self.riwayat_transaksi,
+      ).pack(pady=5)
+    elif role == "kasir":
+      tk.Button(
+          menu_frame,
+          text="Daftar Menu Dijabarkan (Web View)",
+          **btn_style,
+          command=self.lihat_menu_dijabarkan,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Proses Transaksi Penjualan",
+          **btn_style,
+          command=self.transaksi_penjualan,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Registrasi Member Baru",
+          **btn_style,
+          command=self.daftar_member,
+      ).pack(pady=5)
+      tk.Button(
+          menu_frame,
+          text="Riwayat Transaksi & Grafik",
+          **btn_style,
+          command=self.riwayat_transaksi,
+      ).pack(pady=5)
+
+    tk.Button(
+        menu_frame,
+        text="LOGOUT",
+        font=("Arial", 10, "bold"),
+        bg="#E74C3C",
+        fg="white",
+        activebackground="#C0392B",
+        activeforeground="white",
+        width=20,
+        relief="flat",
+        cursor="hand2",
+        command=self.halaman_login,
+    ).pack(pady=20)
+
+  def lihat_menu_dijabarkan(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Katalog Menu Dijabarkan - Pecel Lele Wededed")
+    jendela.geometry("850x550")
+    jendela.config(bg="#FFFFFF")
+
+    header = tk.Frame(jendela, bg="#2E86C1", height=50)
+    header.pack(fill="x")
+    tk.Label(
+        header,
+        text="🌐 KATALOG MENU PECEL LELE WEDEDED (WEB VIEW)",
+        font=("Arial", 12, "bold"),
+        bg="#2E86C1",
+        fg="white",
+    ).pack(pady=12)
+
+    container = tk.Frame(jendela, bg="#FFFFFF")
+    container.pack(fill="both", expand=True, padx=15, pady=15)
+
+    canvas = tk.Canvas(container, bg="#FFFFFF", highlightthickness=0)
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollable_frame = tk.Frame(canvas, bg="#FFFFFF")
+
+    scrollable_frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+    )
+
+    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT kategori, id, nama_produk, harga_jual, stok FROM Produk ORDER BY"
+        " kategori, id"
+    )
+    data = cursor.fetchall()
+    conn.close()
+
+    kategori_dict = {}
+    for cat, id_p, nama, harga, stok in data:
+      if cat not in kategori_dict:
+        kategori_dict[cat] = []
+      kategori_dict[cat].append((id_p, nama, harga, stok))
+
+    for kategori, items in kategori_dict.items():
+      cat_frame = tk.Frame(scrollable_frame, bg="#1A5276", height=30)
+      cat_frame.pack(fill="x", pady=(10, 5))
+      tk.Label(
+          cat_frame,
+          text=f"  📂 KATEGORI: {kategori.upper()}",
+          font=("Arial", 10, "bold"),
+          bg="#1A5276",
+          fg="white",
+      ).pack(side="left", pady=5)
+
+      grid_frame = tk.Frame(scrollable_frame, bg="#FFFFFF")
+      grid_frame.pack(fill="x", pady=5)
+
+      col_idx = 0
+      row_idx = 0
+      for id_p, nama, harga, stok in items:
+        card = tk.Frame(
+            grid_frame, bg="#F8F9F9", bd=1, relief="solid", width=250, height=90
+        )
+        card.grid(row=row_idx, column=col_idx, padx=8, pady=8, sticky="nsew")
+        card.pack_propagate(False)
+
+        tk.Label(
+            card,
+            text=f"ID: {id_p} | {nama}",
+            font=("Arial", 9, "bold"),
+            bg="#F8F9F9",
+            fg="#1A5276",
+            wraplength=230,
+            justify="left",
+        ).pack(anchor="w", padx=8, pady=(8, 2))
+        tk.Label(
+            card,
+            text=f"Harga: Rp {harga:,}",
+            font=("Arial", 9),
+            bg="#F8F9F9",
+            fg="#27AE60",
+        ).pack(anchor="w", padx=8)
+        stok_color = "#C0392B" if stok <= 5 else "#2C3E50"
+        tk.Label(
+            card,
+            text=f"Stok Tersedia: {stok} porsi",
+            font=("Arial", 8, "italic"),
+            bg="#F8F9F9",
+            fg=stok_color,
+        ).pack(anchor="w", padx=8, pady=(0, 8))
+
+        col_idx += 1
+        if col_idx > 2:
+          col_idx = 0
+          row_idx += 1
+
+  def tambah_menu(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Tambah Menu Baru")
+    jendela.geometry("360x380")
+    jendela.config(bg="#EBF3FA")
+
+    tk.Label(
+        jendela,
+        text="FORM TAMBAH MENU",
+        font=("Arial", 11, "bold"),
+        bg="#EBF3FA",
+        fg="#1A5276",
+    ).pack(pady=10)
+
+    tk.Label(jendela, text="Nama Menu:", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_nama = tk.Entry(jendela, width=35, bg="white", relief="solid", bd=1)
+    e_nama.pack(padx=30, pady=(0, 5))
+
+    tk.Label(jendela, text="Kategori Menu:", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_kategori = ttk.Combobox(
+        jendela,
+        values=[
+            "Paket Hemat",
+            "Makanan Utama",
+            "Menu Tambahan",
+            "Minuman",
+        ],
+        width=33,
+    )
+    e_kategori.pack(padx=30, pady=(0, 5))
+    e_kategori.set("Makanan Utama")
+
+    tk.Label(jendela, text="Harga Modal (Rp):", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_modal = tk.Entry(jendela, width=35, bg="white", relief="solid", bd=1)
+    e_modal.pack(padx=30, pady=(0, 5))
+
+    tk.Label(jendela, text="Harga Jual (Rp):", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_jual = tk.Entry(jendela, width=35, bg="white", relief="solid", bd=1)
+    e_jual.pack(padx=30, pady=(0, 5))
+
+    tk.Label(jendela, text="Stok Awal:", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_stok = tk.Entry(jendela, width=35, bg="white", relief="solid", bd=1)
+    e_stok.pack(padx=30, pady=(0, 10))
+
+    def simpan():
+      try:
+        nama = e_nama.get().strip()
+        kategori = e_kategori.get().strip()
+        modal = int(e_modal.get())
+        jual = int(e_jual.get())
+        stok = int(e_stok.get())
+
+        if not nama:
+          messagebox.showerror("Error", "Nama menu tidak boleh kosong!")
+          return
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO Produk (nama_produk, kategori, harga_modal,"
+            " harga_jual, stok) VALUES (?, ?, ?, ?, ?)",
+            (nama, kategori, modal, jual, stok),
+        )
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Sukses", "Menu baru berhasil ditambahkan!")
+        jendela.destroy()
+      except ValueError:
+        messagebox.showerror(
+            "Error", "Harga modal, harga jual, dan stok harus berupa angka!"
+        )
+
+    tk.Button(
+        jendela,
+        text="SIMPAN MENU",
+        bg="#2E86C1",
+        fg="white",
+        font=("Arial", 9, "bold"),
+        relief="flat",
+        cursor="hand2",
+        command=simpan,
+    ).pack(pady=10)
+
+  def hapus_menu(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Hapus Menu")
+    jendela.geometry("320x200")
+    jendela.config(bg="#EBF3FA")
+
+    tk.Label(
+        jendela,
+        text="HAPUS MENU PRODUK",
+        font=("Arial", 11, "bold"),
+        bg="#EBF3FA",
+        fg="#1A5276",
+    ).pack(pady=10)
+    tk.Label(jendela, text="Masukkan ID Menu:", bg="#EBF3FA", fg="#1A5276").pack(
+        pady=5
+    )
+    e_id = tk.Entry(jendela, width=20, bg="white", relief="solid", bd=1)
+    e_id.pack(pady=5)
+
+    def proses_hapus():
+      try:
+        id_prod = int(e_id.get())
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("SELECT nama_produk FROM Produk WHERE id = ?", (id_prod,))
+        p = cursor.fetchone()
+        if p:
+          cursor.execute("DELETE FROM Produk WHERE id = ?", (id_prod,))
+          conn.commit()
+          messagebox.showinfo("Sukses", f"Menu '{p[0]}' berhasil dihapus!")
+          jendela.destroy()
+        else:
+          messagebox.showerror("Error", "ID Menu tidak ditemukan!")
+        conn.close()
+      except ValueError:
+        messagebox.showerror("Error", "ID Menu harus berupa angka!")
+
+    tk.Button(
+        jendela,
+        text="HAPUS",
+        bg="#E74C3C",
+        fg="white",
+        font=("Arial", 9, "bold"),
+        relief="flat",
+        cursor="hand2",
+        command=proses_hapus,
+    ).pack(pady=15)
+
+  def daftar_member(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Registrasi Member")
+    jendela.geometry("340x240")
+    jendela.config(bg="#EBF3FA")
+
+    tk.Label(
+        jendela,
+        text="REGISTRASI MEMBER BARU",
+        font=("Arial", 11, "bold"),
+        bg="#EBF3FA",
+        fg="#1A5276",
+    ).pack(pady=10)
+
+    tk.Label(jendela, text="Nama Member:", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_nama = tk.Entry(jendela, width=30, bg="white", relief="solid", bd=1)
+    e_nama.pack(padx=30, pady=(0, 5))
+
+    tk.Label(jendela, text="No. Telepon / WA:", bg="#EBF3FA", fg="#1A5276").pack(
+        anchor="w", padx=30, pady=(5, 0)
+    )
+    e_telp = tk.Entry(jendela, width=30, bg="white", relief="solid", bd=1)
+    e_telp.pack(padx=30, pady=(0, 10))
+
+    def simpan_member():
+      nama = e_nama.get().strip()
+      telp = e_telp.get().strip()
+      if nama and telp:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO Member (nama, no_telp, poin) VALUES (?, ?, 0)",
+            (nama, telp),
+        )
+        conn.commit()
+        conn.close()
+        messagebox.showinfo("Sukses", f"Member '{nama}' berhasil didaftarkan!")
+        jendela.destroy()
+      else:
+        messagebox.showerror("Error", "Semua kolom input wajib diisi!")
+
+    tk.Button(
+        jendela,
+        text="DAFTAR MEMBER",
+        bg="#2E86C1",
+        fg="white",
+        font=("Arial", 9, "bold"),
+        relief="flat",
+        cursor="hand2",
+        command=simpan_member,
+    ).pack(pady=10)
+
+  def transaksi_penjualan(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Transaksi Penjualan - Pecel Lele Wededed")
+    jendela.geometry("1100x680")
+    jendela.config(bg="#EBF3FA")
+
+    # Layout dibagi dua: Kiri (Katalog Menu Interaktif), Kanan (Keranjang & Pembayaran)
+    left_frame = tk.Frame(jendela, bg="white", bd=1, relief="solid")
+    left_frame.pack(
+        side="left", fill="both", expand=True, padx=10, pady=10
+    )
+
+    right_frame = tk.Frame(jendela, bg="white", bd=1, relief="solid", width=420)
+    right_frame.pack(
+        side="right", fill="both", expand=False, padx=10, pady=10
+    )
+    right_frame.pack_propagate(False)
+
+    # --- SISI KIRI: KATALOG MENU (KLIK UNTUK BELI) ---
+    tk.Label(
+        left_frame,
+        text="PILIH MENU (KLIK UNTUK TAMBAH)",
+        font=("Arial", 11, "bold"),
+        bg="white",
+        fg="#1A5276",
+    ).pack(pady=8)
+
+    # Search bar untuk mempermudah pencarian menu
+    search_frame = tk.Frame(left_frame, bg="white")
+    search_frame.pack(fill="x", padx=10, pady=2)
+    tk.Label(
+        search_frame, text="Cari Menu:", font=("Arial", 9), bg="white"
+    ).pack(side="left", padx=(0, 5))
+    e_cari = tk.Entry(
+        search_frame, font=("Arial", 9), bg="#F2F4F4", relief="solid", bd=1
+    )
+    e_cari.pack(side="left", fill="x", expand=True, padx=5)
+
+    # Canvas scrollable untuk tombol menu
+    canvas_menu = tk.Canvas(left_frame, bg="#FFFFFF", highlightthickness=0)
+    scrollbar_menu = ttk.Scrollbar(
+        left_frame, orient="vertical", command=canvas_menu.yview
+    )
+    scrollable_menu_frame = tk.Frame(canvas_menu, bg="#FFFFFF")
+
+    scrollable_menu_frame.bind(
+        "<Configure>",
+        lambda e: canvas_menu.configure(scrollregion=canvas_menu.bbox("all")),
+    )
+    canvas_menu.create_window(
+        (0, 0), window=scrollable_menu_frame, anchor="nw"
+    )
+    canvas_menu.configure(yscrollcommand=scrollbar_menu.set)
+
+    canvas_menu.pack(side="left", fill="both", expand=True, padx=5, pady=5)
+    scrollbar_menu.pack(side="right", fill="y")
+
+    keranjang = []
+
+    def muat_tombol_menu(filter_nama=""):
+      for widget in scrollable_menu_frame.winfo_children():
+        widget.destroy()
+
+      conn = sqlite3.connect(DB_NAME)
+      cursor = conn.cursor()
+      if filter_nama:
+        cursor.execute(
+            "SELECT id, nama_produk, kategori, harga_jual, stok FROM Produk"
+            " WHERE nama_produk LIKE ? ORDER BY kategori, id",
+            (f"%{filter_nama}%",),
+        )
+      else:
+        cursor.execute(
+            "SELECT id, nama_produk, kategori, harga_jual, stok FROM Produk"
+            " ORDER BY kategori, id"
+        )
+      data = cursor.fetchall()
+      conn.close()
+
+      kategori_dict = {}
+      for id_p, nama, cat, harga, stok in data:
+        if cat not in kategori_dict:
+          kategori_dict[cat] = []
+        kategori_dict[cat].append((id_p, nama, harga, stok))
+
+      for kategori, items in kategori_dict.items():
+        lbl_cat = tk.Label(
+            scrollable_menu_frame,
+            text=f"--- {kategori.upper()} ---",
+            font=("Arial", 9, "bold"),
+            bg="#1A5276",
+            fg="white",
+        )
+        lbl_cat.pack(fill="x", padx=5, pady=(8, 2))
+
+        grid_btn = tk.Frame(scrollable_menu_frame, bg="#FFFFFF")
+        grid_btn.pack(fill="x", padx=5, pady=2)
+
+        col = 0
+        row = 0
+        for id_p, nama, harga, stok in items:
+          # Tombol Menu interaktif (Klik untuk memasukkan ke keranjang)
+          btn_warna = "#EAFAF1" if stok > 0 else "#FADBD8"
+          btn_teks = (
+              f"{nama}\nRp {harga:,}\nStok: {stok}"
+              if stok > 0
+              else f"{nama}\n(HABIS)"
+          )
+
+          def buat_aksi(pid, pnm, phrg, pstk):
+            return lambda: tambah_dari_klik(pid, pnm, phrg, pstk)
+
+          b = tk.Button(
+              grid_btn,
+              text=btn_teks,
+              font=("Arial", 8),
+              bg=btn_warna,
+              fg="#2C3E50",
+              width=22,
+              height=3,
+              relief="solid",
+              bd=1,
+              cursor="hand2",
+              command=buat_aksi(id_p, nama, harga, stok),
+          )
+          if stok <= 0:
+            b.config(state="disabled")
+
+          b.grid(row=row, column=col, padx=3, pady=3, sticky="nsew")
+          col += 1
+          if col > 1:
+            col = 0
+            row += 1
+
+    e_cari.bind("<KeyRelease>", lambda e: muat_tombol_menu(e_cari.get().strip()))
+    muat_tombol_menu()
+
+    # --- SISI KANAN: KERANJANG & PEMBAYARAN ---
+    tk.Label(
+        right_frame,
+        text="KERANJANG BELANJA",
+        font=("Arial", 11, "bold"),
+        bg="white",
+        fg="#1A5276",
+    ).pack(pady=8)
+
+    frame_member_input = tk.Frame(right_frame, bg="white")
+    frame_member_input.pack(fill="x", padx=10, pady=2)
+    tk.Label(
+        frame_member_input,
+        text="Nama Member:",
+        font=("Arial", 9, "bold"),
+        bg="white",
+    ).pack(side="left")
+    e_nama_member = tk.Entry(
+        frame_member_input, width=20, bg="#F2F4F4", relief="solid", bd=1
+    )
+    e_nama_member.pack(side="left", padx=5)
+
+    tree_k = ttk.Treeview(
+        right_frame,
+        columns=("Nama", "Qty", "Subtotal"),
+        show="headings",
+        height=8,
+    )
+    tree_k.heading("Nama", text="Nama Item")
+    tree_k.heading("Qty", text="Qty")
+    tree_k.heading("Subtotal", text="Subtotal")
+
+    tree_k.column("Nama", width=160)
+    tree_k.column("Qty", width=40, anchor="center")
+    tree_k.column("Subtotal", width=110, anchor="e")
+    tree_k.pack(fill="x", padx=10, pady=5)
+
+    # Tombol hapus item terpilih dari keranjang
+    def hapus_item_keranjang():
+      selected_item = tree_k.selection()
+      if not selected_item:
+        messagebox.showwarning(
+            "Peringatan", "Pilih item di keranjang yang ingin dihapus!"
+        )
+        return
+      for item in selected_item:
+        index = tree_k.index(item)
+        tree_k.delete(item)
+        keranjang.pop(index)
+      update_total_tampilan()
+
+    tk.Button(
+        right_frame,
+        text="Hapus Item Terpilih",
+        bg="#E74C3C",
+        fg="white",
+        font=("Arial", 8, "bold"),
+        relief="flat",
+        cursor="hand2",
+        command=hapus_item_keranjang,
+    ).pack(pady=2)
+
+    frame_bayar = tk.Frame(right_frame, bg="white")
+    frame_bayar.pack(fill="x", padx=10, pady=5)
+
+    tk.Label(
+        frame_bayar,
+        text="Jumlah Uang (Rp):",
+        font=("Arial", 9, "bold"),
+        bg="white",
+    ).grid(row=0, column=0, sticky="w", pady=2)
+    e_uang = tk.Entry(
+        frame_bayar, width=18, bg="#F2F4F4", relief="solid", bd=1
+    )
+    e_uang.grid(row=0, column=1, sticky="w", pady=2, padx=5)
+
+    lbl_total_info = tk.Label(
+        frame_bayar,
+        text="Total Tagihan: Rp 0",
+        font=("Arial", 10, "bold"),
+        bg="white",
+        fg="#C0392B",
+    )
+    lbl_total_info.grid(row=1, column=0, columnspan=2, sticky="w", pady=5)
+
+    def update_total_tampilan():
+      total = sum(item[4] for item in keranjang)
+      lbl_total_info.config(text=f"Total Tagihan: Rp {total:,}")
+
+    def tambah_dari_klik(id_p, nama, harga, stok):
+      # Cek apakah sudah ada di keranjang
+      found = False
+      for idx, item in enumerate(keranjang):
+        if item[0] == id_p:
+          # Cek stok
+          if item[2] + 1 > stok:
+            messagebox.showerror("Error", "Stok produk tidak mencukupi!")
+            return
+          new_qty = item[2] + 1
+          new_sub = new_qty * harga
+          keranjang[idx] = (id_p, nama, new_qty, harga, new_sub)
+          found = True
+          break
+
+      if not found:
+        if stok < 1:
+          messagebox.showerror("Error", "Stok produk habis!")
+          return
+        keranjang.append((id_p, nama, 1, harga, harga))
+
+      # Refresh Treeview keranjang
+      for row in tree_k.get_children():
+        tree_k.delete(row)
+      for item in keranjang:
+        tree_k.insert(
+            "", tk.END, values=(item[1], item[2], f"Rp {item[4]:,}")
+        )
+      update_total_tampilan()
+
+    txt_struk = tk.Text(
+        right_frame,
+        font=("Courier", 8),
+        bg="#F8F9F9",
+        fg="#17202A",
+        bd=1,
+        relief="solid",
+        height=9,
+    )
+    txt_struk.pack(fill="both", expand=True, padx=10, pady=5)
+
+    def cetak_struk_dan_simpan():
+      if not keranjang:
+        messagebox.showerror("Error", "Keranjang belanja masih kosong!")
+        return
+
+      try:
+        uang_dibayar = int(e_uang.get().strip())
+      except ValueError:
+        messagebox.showerror(
+            "Error", "Jumlah uang pembayaran harus diisi angka!"
+        )
+        return
+
+      input_nama_member = e_nama_member.get().strip()
+      id_member = None
+      nama_member_final = "Non-Member"
+
+      conn = sqlite3.connect(DB_NAME)
+      cursor = conn.cursor()
+
+      if input_nama_member:
+        cursor.execute(
+            "SELECT id, nama FROM Member WHERE nama LIKE ?",
+            (f"%{input_nama_member}%",),
+        )
+        m = cursor.fetchone()
+        if m:
+          id_member = m[0]
+          nama_member_final = m[1]
+        else:
+          messagebox.showwarning(
+              "Peringatan",
+              f"Nama member '{input_nama_member}' tidak ditemukan. Transaksi"
+              " diproses sebagai Non-Member.",
+          )
+
+      tanggal = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+      nama_kasir = self.current_user[1] if self.current_user else "Kasir"
+      total_belanja = sum(item[4] for item in keranjang)
+
+      diskon_member = 0
+      diskon_belanja = 0
+
+      # Aturan Diskon:
+      # - Jika member: dapat diskon member 10%. TIDAK DAPAT diskon belanja >= 150rb.
+      # - Jika non-member: jika belanja >= 150rb, dapat diskon belanja 10%.
+      if id_member:
+        diskon_member = int(total_belanja * 0.10)
+      else:
+        if total_belanja >= 150000:
+          diskon_belanja = int(total_belanja * 0.10)
+
+      total_diskon = diskon_member + diskon_belanja
+      total_akhir = total_belanja - total_diskon
+
+      if uang_dibayar < total_akhir:
+        messagebox.showerror(
+            "Error",
+            f"Uang pembayaran kurang! Total tagihan: Rp {total_akhir:,}",
+        )
+        conn.close()
+        return
+
+      kembalian = uang_dibayar - total_akhir
+
+      try:
+        cursor.execute(
+            "INSERT INTO Transaksi (tanggal, id_member, nama_kasir,"
+            " total_bayar, diskon, bayar, kembalian) VALUES (?, ?, ?, ?, ?, ?,"
+            " ?)",
+            (
+                tanggal,
+                id_member,
+                nama_kasir,
+                total_akhir,
+                total_diskon,
+                uang_dibayar,
+                kembalian,
+            ),
+        )
+        id_transaksi = cursor.lastrowid
+
+        for item in keranjang:
+          id_p, _, jml, _, sub = item
+          cursor.execute(
+              "INSERT INTO Detail_Transaksi (id_transaksi, id_produk, jumlah,"
+              " subtotal) VALUES (?, ?, ?, ?)",
+              (id_transaksi, id_p, jml, sub),
+          )
+          cursor.execute(
+              "UPDATE Produk SET stok = stok - ? WHERE id = ?", (jml, id_p)
+          )
+
+        if id_member:
+          poin_baru = int(total_belanja / 10000)
+          cursor.execute(
+              "UPDATE Member SET poin = poin + ? WHERE id = ?",
+              (poin_baru, id_member),
+          )
+
+        conn.commit()
+      except Exception as e:
+        conn.rollback()
+        messagebox.showerror("Error Database", f"Gagal memproses transaksi: {e}")
+        conn.close()
+        return
+
+      conn.close()
+
+      struk_text = f"{'PECEL LELE WEDEDED':^40}\n"
+      struk_text += f"{'Jl. Raya Utama No. 12, Karawang':^40}\n"
+      struk_text += f"{'Telp: 0812-3456-7890':^40}\n"
+      struk_text += "=" * 40 + "\n"
+      struk_text += f"No. Transaksi : #{id_transaksi:<10}\n"
+      struk_text += f"Tanggal       : {tanggal}\n"
+      struk_text += f"Kasir         : {nama_kasir}\n"
+      struk_text += f"Pelanggan     : {nama_member_final}\n"
+      struk_text += "-" * 40 + "\n"
+
+      for item in keranjang:
+        _, nama, jml, _, sub = item
+        nama_potong = nama[:22]
+        struk_text += f"{nama_potong:<22}\n"
+        struk_text += f"  {jml} x item = Rp {sub:,}\n"
+
+      struk_text += "-" * 40 + "\n"
+      struk_text += f"{'Subtotal':<25}: Rp {total_belanja:,}\n"
+
+      if diskon_member > 0:
+        struk_text += f"{'Diskon Member (10%)':<25}: -Rp {diskon_member:,}\n"
+      if diskon_belanja > 0:
+        struk_text += (
+            f"{'Diskon (Belanja >=150rb)':<25}: -Rp {diskon_belanja:,}\n"
+        )
+
+      struk_text += f"{'Total Diskon':<25}: Rp {total_diskon:,}\n"
+      struk_text += "=" * 40 + "\n"
+      struk_text += f"{'TOTAL BAYAR':<25}: Rp {total_akhir:,}\n"
+      struk_text += f"{'Tunai':<25}: Rp {uang_dibayar:,}\n"
+      struk_text += f"{'Kembalian':<25}: Rp {kembalian:,}\n"
+      struk_text += "=" * 40 + "\n\n"
+      struk_text += f"{'Terima Kasih Atas Kunjungan Anda!':^40}\n"
+      struk_text += f"{'Selamat Menikmati Hidangan':^40}\n"
+
+      txt_struk.delete("1.0", tk.END)
+      txt_struk.insert(tk.END, struk_text)
+
+      try:
+        nama_file_struk = f"struk_transaksi_{id_transaksi}.txt"
+        with open(nama_file_struk, "w", encoding="utf-8") as f:
+          f.write(struk_text)
+        messagebox.showinfo(
+            "Cetak Struk",
+            f"Transaksi berhasil!\nStruk berhasil dicetak ke file:"
+            f" '{nama_file_struk}'",
+        )
+      except Exception as ex:
+        messagebox.showwarning(
+            "Peringatan",
+            f"Transaksi tersimpan, tetapi gagal mencetak file teks: {ex}",
+        )
+
+      keranjang.clear()
+      for row in tree_k.get_children():
+        tree_k.delete(row)
+      e_nama_member.delete(0, tk.END)
+      e_uang.delete(0, tk.END)
+      update_total_tampilan()
+      muat_tombol_menu()
+
+    tk.Button(
+        right_frame,
+        text="PROSES & CETAK STRUK",
+        bg="#27AE60",
+        fg="white",
+        font=("Arial", 10, "bold"),
+        relief="flat",
+        cursor="hand2",
+        command=cetak_struk_dan_simpan,
+    ).pack(pady=8, fill="x", padx=10)
+
+  def riwayat_transaksi(self):
+    jendela = tk.Toplevel(self.root)
+    jendela.title("Riwayat & Grafik Penjualan")
+    jendela.geometry("720x480")
+    jendela.config(bg="#EBF3FA")
+
+    tk.Label(
+        jendela,
+        text="RIWAYAT TRANSAKSI PENJUALAN",
+        font=("Arial", 11, "bold"),
+        bg="#EBF3FA",
+        fg="#1A5276",
+    ).pack(pady=10)
+
+    tree = ttk.Treeview(
+        jendela,
+        columns=(
+            "ID",
+            "Tanggal",
+            "Kasir",
+            "Total",
+            "Bayar",
+            "Kembali",
+        ),
+        show="headings",
+        height=8,
+    )
+    tree.heading("ID", text="ID")
+    tree.heading("Tanggal", text="Tanggal")
+    tree.heading("Kasir", text="Kasir")
+    tree.heading("Total", text="Total Bayar")
+    tree.heading("Bayar", text="Tunai")
+    tree.heading("Kembali", text="Kembalian")
+
+    tree.column("ID", width=30, anchor="center")
+    tree.column("Tanggal", width=130, anchor="center")
+    tree.column("Kasir", width=80, anchor="center")
+    tree.column("Total", width=100, anchor="e")
+    tree.column("Bayar", width=100, anchor="e")
+    tree.column("Kembali", width=100, anchor="e")
+    tree.pack(fill="x", padx=15, pady=5)
+
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, tanggal, nama_kasir, total_bayar, bayar, kembalian FROM"
+        " Transaksi ORDER BY id DESC"
+    )
+    for row in cursor.fetchall():
+      nama_kasir_val = row[2] if row[2] else "-"
+      tree.insert(
+          "",
+          tk.END,
+          values=(
+              row[0],
+              row[1],
+              nama_kasir_val,
+              f"Rp {row[3]:,}",
+              f"Rp {row[4]:,}",
+              f"Rp {row[5]:,}",
+          ),
+      )
+
+    cursor.execute("""
+            SELECT p.nama_produk, SUM(dt.jumlah) as total_terjual 
+            FROM Detail_Transaksi dt 
+            JOIN Produk p ON dt.id_produk = p.id 
+            GROUP BY p.id
+        """)
+    data_grafik = cursor.fetchall()
+    conn.close()
+
+    tk.Label(
+        jendela,
+        text="GRAFIK ITEM TERJUAL",
+        font=("Arial", 10, "bold"),
+        bg="#EBF3FA",
+        fg="#1A5276",
+    ).pack(pady=(15, 5))
+
+    text_grafik = tk.Text(
+        jendela,
+        height=7,
+        width=80,
+        bg="white",
+        fg="#2C3E50",
+        font=("Courier", 9),
+        bd=1,
+        relief="solid",
+    )
+    text_grafik.pack(padx=15, pady=5)
+
+    for nama, jumlah in data_grafik:
+      batang = "█" * jumlah
+      text_grafik.insert(tk.END, f"{nama[:30]:<30} | {batang} ({jumlah})\n")
+    text_grafik.config(state=tk.DISABLED)
+
+
+if __name__ == "__main__":
+  root = tk.Tk()
+  app = AplikasiPecelLele(root)
+  root.mainloop()
